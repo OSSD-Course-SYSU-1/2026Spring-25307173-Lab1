@@ -1,10 +1,9 @@
 import http from '@ohos.net.http';
-import promptAction from '@ohos.promptAction';
 import router from '@ohos.router';
 
-// ======================
-// 类型定义
-// ======================
+// ==========================================
+// 📋 数据接口定义 (Interfaces)
+// ==========================================
 interface WeatherData {
   obsTime: string;
   temp: number;
@@ -39,10 +38,6 @@ interface WeatherResponse {
   wind: WeatherWind;
 }
 
-interface HttpRequestOptions {
-  method: http.RequestMethod;
-}
-
 interface CityInfo {
   name: string;
   pinyin: string;
@@ -53,22 +48,31 @@ interface LifeIndexItem {
   icon: string;
 }
 
-// ✨ 新增：定义主题颜色结构
 interface ThemeColors {
   pageBg: string;       // 整个页面的背景色
-  cardBg: string;       // 面板/卡片的背景色（使用半透明，实现毛玻璃融合效果）
+  cardBg: string;       // 面板/卡片的背景色
   mainText: string;     // 主标题/大字颜色
   subText: string;      // 次要文字颜色
 }
 
+// ==========================================
+// 🚀 主页面组件 (Index Component)
+// ==========================================
 @Entry
 @Component
 struct Index {
   @State isLoading: boolean = false;
   @State errorMsg: string = '';
-  @State weather: WeatherData = initWeatherData();
   @State isRefreshing: boolean = false;
 
+  // 使用 @Watch 监听天气数据变化
+  @State @Watch('onWeatherChange') weather: WeatherData = initWeatherData();
+
+  // 状态变量：缓存计算好的主题色和生活指数
+  @State currentTheme: ThemeColors = { pageBg: '#4FC3F7', cardBg: 'rgba(255, 255, 255, 0.25)', mainText: '#FFFFFF', subText: '#E3F2FD' };
+  @State lifeIndexData: Array<LifeIndexItem> = [];
+
+  // 城市列表数据
   private cityList: Array<CityInfo> = [
     { name: '北京', pinyin: 'Beijing' },
     { name: '上海', pinyin: 'Shanghai' },
@@ -113,32 +117,230 @@ struct Index {
     this.getWeather();
   }
 
-  // 🔥 核心 UI 逻辑：根据天气动态生成主题色
+  // 当天气数据改变时，集中更新缓存变量
+  onWeatherChange() {
+    this.currentTheme = this.getThemeColors();
+    this.lifeIndexData = this.getLifeIndexData();
+  }
+
+  // ==========================================
+  // 🎨 UI 子组件拆分区域 (使用 @Builder)
+  // ==========================================
+
+  // 1. 顶部标题栏
+  @Builder HeaderTitle() {
+    Row() {
+      Text('宇飞天气')
+        .fontSize(16)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.currentTheme.subText)
+    }
+    .width('100%')
+    .padding({ top: 40, bottom: 10 })
+    .backgroundColor(Color.Transparent)
+    .justifyContent(FlexAlign.Center)
+  }
+
+  // 2. 城市选择器
+  @Builder CitySelector() {
+    Row({ space: 10 }) {
+      Text('选择城市:')
+        .fontSize(18)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.currentTheme.mainText)
+
+      Select(this.getSelectOptions())
+        .selected(0)
+        .value(this.currentCity.name)
+        .font({ size: 16, weight: FontWeight.Medium })
+        .fontColor(this.currentTheme.mainText)
+        .selectedOptionFont({ size: 16, weight: FontWeight.Medium })
+        .optionFont({ size: 16, weight: FontWeight.Normal })
+        .backgroundColor(Color.Transparent)
+        .onSelect((index: number) => {
+          this.currentCity = this.cityList[index];
+          this.getWeather();
+        })
+    }
+    .width('90%')
+    .justifyContent(FlexAlign.Start)
+    .padding({ left: 10, top: 10 })
+  }
+
+  // 3. 核心天气面板（大字温度）
+  @Builder MainWeatherInfo() {
+    Column({ space: 10 }) {
+      Text(`${this.currentCity.name} 实时天气`)
+        .fontSize(22)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.currentTheme.mainText)
+
+      Text(`${this.weather.temp}°C`)
+        .fontSize(58)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.currentTheme.mainText)
+
+      Text(this.weather.text)
+        .fontSize(20)
+        .fontColor(this.currentTheme.subText)
+    }
+  }
+
+  // 4. 天气详细数据卡片
+  @Builder WeatherDetailCard() {
+    Column({ space: 10 }) {
+      Row() { Text('体感温度').fontSize(15).fontColor(this.currentTheme.subText).flexGrow(1); Text(`${this.weather.feelsLike}°C`).fontSize(15).fontColor(this.currentTheme.mainText) }.width('100%')
+      Row() { Text('湿度').fontSize(15).fontColor(this.currentTheme.subText).flexGrow(1); Text(`${this.weather.humidity}%`).fontSize(15).fontColor(this.currentTheme.mainText) }.width('100%')
+      Row() { Text('更新时间').fontSize(15).fontColor(this.currentTheme.subText).flexGrow(1); Text(this.weather.obsTime).fontSize(15).fontColor(this.currentTheme.mainText) }.width('100%')
+    }
+    .padding(15)
+    .backgroundColor(this.currentTheme.cardBg)
+    .borderRadius(12)
+    .width('90%')
+  }
+
+  // 5. 未来5天预报跳转入口
+  @Builder ForecastNavCard() {
+    Row() {
+      Column() {
+        Text('查看未来 5 天天气预报')
+          .fontSize(16)
+          .fontWeight(FontWeight.Bold)
+          .fontColor(this.currentTheme.mainText)
+        Text('包含多云、晴天趋势及温度变化范围')
+          .fontSize(13)
+          .fontColor(this.currentTheme.subText)
+          .margin({ top: 4 })
+      }
+      .alignItems(HorizontalAlign.Start)
+      .flexGrow(1)
+    }
+    .width('90%')
+    .padding(15)
+    .margin({ top: 15 })
+    .backgroundColor(this.currentTheme.cardBg)
+    .borderRadius(12)
+    .shadow({ radius: 4, color: 'rgba(0,0,0,0.1)', offsetX: 0, offsetY: 2 })
+    .onClick(() => {
+      router.pushUrl({
+        url: 'pages/Forecast',
+        params: {
+          'cityName': this.currentCity.name,
+          'cityPinyin': this.currentCity.pinyin
+        }
+      }).catch(() => {});
+    })
+  }
+
+  // 6. 动态生活指数网格卡片
+  @Builder LifeIndexGridCard() {
+    Grid() {
+      ForEach(this.lifeIndexData, (item: LifeIndexItem) => {
+        GridItem() {
+          Column({ space: 8 }) {
+            Text(item.icon)
+              .fontSize(28)
+            Text(item.title)
+              .fontSize(14)
+              .fontColor(this.currentTheme.mainText)
+              .fontWeight(FontWeight.Medium)
+          }
+          .justifyContent(FlexAlign.Center)
+          .alignItems(HorizontalAlign.Center)
+          .width('100%')
+          .height('100%')
+        }
+        .border({
+          width: { right: 0.5, bottom: 0.5 },
+          color: 'rgba(255, 255, 255, 0.15)'
+        })
+      }, (item: LifeIndexItem) => item.title)
+    }
+    .columnsTemplate('1fr 1fr 1fr')
+    .rowsTemplate('1fr 1fr')
+    .width('90%')
+    .height(180)
+    .margin({ top: 15 })
+    .padding(5)
+    .backgroundColor(this.currentTheme.cardBg)
+    .borderRadius(20)
+    .shadow({ radius: 6, color: 'rgba(0,0,0,0.1)', offsetX: 0, offsetY: 3 })
+  }
+
+  // ==========================================
+  // 🧱 主构建函数 (Main Build Function)
+  // ==========================================
+  build() {
+    Column() {
+      // 顶部标题栏
+      this.HeaderTitle()
+
+      Refresh({ refreshing: $$this.isRefreshing }) {
+        Scroll() {
+          Column({ space: 15 }) {
+
+            // 城市切换选择器
+            this.CitySelector()
+
+            // 天气主要内容面板
+            Column({ space: 10 }) {
+              this.MainWeatherInfo()
+              this.WeatherDetailCard()
+
+              // 错误消息展示
+              if (this.errorMsg) {
+                Text(this.errorMsg)
+                  .fontColor(Color.Red)
+                  .fontSize(14)
+                  .backgroundColor('rgba(255,255,255,0.8)')
+                  .padding(4)
+                  .borderRadius(4);
+              }
+
+              // 未来5天预报入口卡片
+              this.ForecastNavCard()
+
+              // 动态生活指数网格卡片
+              this.LifeIndexGridCard()
+            }
+            .width('100%')
+            .padding({ bottom: 40 })
+          }
+          .width('100%')
+        }
+        .scrollBar(BarState.Off)
+        .width('100%')
+        .height('100%')
+        .align(Alignment.Top)
+      }
+      .onRefreshing(() => {
+        this.getWeather();
+      })
+      .layoutWeight(1)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.currentTheme.pageBg)
+    .animation({ duration: 500, curve: Curve.EaseInOut });
+  }
+
+  // ==========================================
+  // ⚙️ 业务逻辑处理函数 (Logic Functions)
+  // ==========================================
+
   getThemeColors(): ThemeColors {
     const text = this.weather.text || '';
-
-    // 晴天：浅蓝色系
     if (text.includes('晴')) {
       return { pageBg: '#5E92F3', cardBg: 'rgba(255, 255, 255, 0.25)', mainText: '#FFFFFF', subText: '#E3F2FD' };
-    }
-    // 多云/阴天：灰色系
-    else if (text.includes('云') || text.includes('阴')) {
+    } else if (text.includes('云') || text.includes('阴')) {
       return { pageBg: '#78909C', cardBg: 'rgba(255, 255, 255, 0.2)', mainText: '#FFFFFF', subText: '#ECEFF1' };
-    }
-    // 下雨：湖蓝色系
-    else if (text.includes('雨') || text.includes('暴')) {
+    } else if (text.includes('雨') || text.includes('暴')) {
       return { pageBg: '#0277BD', cardBg: 'rgba(0, 0, 0, 0.15)', mainText: '#FFFFFF', subText: '#B3E5FC' };
-    }
-    // 下雪：浅灰蓝色
-    else if (text.includes('雪') || text.includes('冰')) {
+    } else if (text.includes('雪') || text.includes('冰')) {
       return { pageBg: '#90A4AE', cardBg: 'rgba(255, 255, 255, 0.3)', mainText: '#FFFFFF', subText: '#F5F7F8' };
-    }
-    // 雾霾/沙尘：棕灰色
-    else if (text.includes('霾') || text.includes('沙') || text.includes('尘')) {
+    } else if (text.includes('霾') || text.includes('沙') || text.includes('尘')) {
       return { pageBg: '#8D6E63', cardBg: 'rgba(255, 255, 255, 0.2)', mainText: '#FFFFFF', subText: '#D7CCC8' };
-    }
-    // 默认/其他：清爽蓝
-    else {
+    } else {
       return { pageBg: '#4FC3F7', cardBg: 'rgba(255, 255, 255, 0.25)', mainText: '#FFFFFF', subText: '#E3F2FD' };
     }
   }
@@ -174,165 +376,6 @@ struct Index {
     return indexList;
   }
 
-  build() {
-    Column() {
-      // 1. 标题栏 (改成透明背景，文字跟着主题变)
-      Row() {
-        Text('宇飞天气')
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(this.getThemeColors().subText) // ✨ 修改：直接调用方法获取颜色
-      }
-      .width('100%')
-      .padding({ top: 40, bottom: 10 })
-      .backgroundColor(Color.Transparent)
-      .justifyContent(FlexAlign.Center)
-
-      Refresh({ refreshing: $$this.isRefreshing }) {
-        Scroll() {
-          Column({ space: 15 }) {
-
-            // 城市切换选择器
-            Row({ space: 10 }) {
-              Text('选择城市:')
-                .fontSize(18)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(this.getThemeColors().mainText) // ✨ 修改
-
-              Select(this.getSelectOptions())
-                .selected(0)
-                .value(this.currentCity.name)
-                .font({ size: 16, weight: FontWeight.Medium })
-                .fontColor(this.getThemeColors().mainText) // ✨ 修改
-                .selectedOptionFont({ size: 16, weight: FontWeight.Medium })
-                .optionFont({ size: 16, weight: FontWeight.Normal })
-                .backgroundColor(Color.Transparent)
-                .onSelect((index: number) => {
-                  this.currentCity = this.cityList[index];
-                  this.getWeather();
-                })
-            }
-            .width('90%')
-            .justifyContent(FlexAlign.Start)
-            .padding({ left: 10, top: 10 })
-
-            // 天气主要信息
-            Column({ space: 10 }) {
-              Text(`${this.currentCity.name} 实时天气`)
-                .fontSize(22)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.getThemeColors().mainText); // ✨ 修改
-
-              Text(`${this.weather.temp}°C`)
-                .fontSize(58)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.getThemeColors().mainText); // ✨ 修改
-
-              Text(this.weather.text)
-                .fontSize(20)
-                .fontColor(this.getThemeColors().subText); // ✨ 修改
-
-              // 详细数据面板
-              Column({ space: 10 }) {
-                Row() { Text('体感温度').fontSize(15).fontColor(this.getThemeColors().subText).flexGrow(1); Text(`${this.weather.feelsLike}°C`).fontSize(15).fontColor(this.getThemeColors().mainText) }.width('100%')
-                Row() { Text('湿度').fontSize(15).fontColor(this.getThemeColors().subText).flexGrow(1); Text(`${this.weather.humidity}%`).fontSize(15).fontColor(this.getThemeColors().mainText) }.width('100%')
-                Row() { Text('更新时间').fontSize(15).fontColor(this.getThemeColors().subText).flexGrow(1); Text(this.weather.obsTime).fontSize(15).fontColor(this.getThemeColors().mainText) }.width('100%')
-              }
-              .padding(15)
-              .backgroundColor(this.getThemeColors().cardBg) // ✨ 修改
-              .borderRadius(12)
-              .width('90%')
-
-              if (this.errorMsg) {
-                Text(this.errorMsg).fontColor(Color.Red).fontSize(14).backgroundColor('rgba(255,255,255,0.8)').padding(4).borderRadius(4);
-              }
-
-              // 未来五天天气预报卡片
-              Row() {
-                Column() {
-                  Text('查看未来 5 天天气预报')
-                    .fontSize(16)
-                    .fontWeight(FontWeight.Bold)
-                    .fontColor(this.getThemeColors().mainText) // ✨ 修改
-                  Text('包含多云、晴天趋势及温度变化范围')
-                    .fontSize(13)
-                    .fontColor(this.getThemeColors().subText) // ✨ 修改
-                    .margin({ top: 4 })
-                }
-                .alignItems(HorizontalAlign.Start)
-                .flexGrow(1)
-              }
-              .width('90%')
-              .padding(15)
-              .margin({ top: 15 })
-              .backgroundColor(this.getThemeColors().cardBg) // ✨ 修改
-              .borderRadius(12)
-              .shadow({ radius: 4, color: 'rgba(0,0,0,0.1)', offsetX: 0, offsetY: 2 })
-              .onClick(() => {
-                router.pushUrl({
-                  url: 'pages/Forecast',
-                  params: {
-                    'cityName': this.currentCity.name,
-                    'cityPinyin': this.currentCity.pinyin
-                  }
-                });
-              })
-
-              // 动态生活指数网格卡片
-              Grid() {
-                ForEach(this.getLifeIndexData(), (item: LifeIndexItem) => {
-                  GridItem() {
-                    Column({ space: 8 }) {
-                      Text(item.icon)
-                        .fontSize(28)
-                      Text(item.title)
-                        .fontSize(14)
-                        .fontColor(this.getThemeColors().mainText) // ✨ 修改
-                        .fontWeight(FontWeight.Medium)
-                    }
-                    .justifyContent(FlexAlign.Center)
-                    .alignItems(HorizontalAlign.Center)
-                    .width('100%')
-                    .height('100%')
-                  }
-                  .border({
-                    width: { right: 0.5, bottom: 0.5 },
-                    color: 'rgba(255, 255, 255, 0.15)'
-                  })
-                })
-              }
-              .columnsTemplate('1fr 1fr 1fr')
-              .rowsTemplate('1fr 1fr')
-              .width('90%')
-              .height(180)
-              .margin({ top: 15 })
-              .padding(5)
-              .backgroundColor(this.getThemeColors().cardBg) // ✨ 修改
-              .borderRadius(20)
-              .shadow({ radius: 6, color: 'rgba(0,0,0,0.1)', offsetX: 0, offsetY: 3 })
-
-            }
-            .width('100%')
-            .padding({ bottom: 40 })
-          }
-          .width('100%')
-        }
-        .scrollBar(BarState.Off)
-        .width('100%')
-        .height('100%')
-        .align(Alignment.Top)
-      }
-      .onRefreshing(() => {
-        this.getWeather();
-      })
-      .layoutWeight(1)
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(this.getThemeColors().pageBg) // ✨ 修改：最底层的背景颜色同步
-    .animation({ duration: 500, curve: Curve.EaseInOut });
-  }
-
   getSelectOptions(): Array<SelectOption> {
     let options: Array<SelectOption> = [];
     for (let i = 0; i < this.cityList.length; i++) {
@@ -366,6 +409,9 @@ struct Index {
   }
 }
 
+// ==========================================
+// 🛠️ 全局辅助工具函数 (Helper Functions)
+// ==========================================
 function initWeatherData(): WeatherData {
   return {
     obsTime: '', temp: 0, feelsLike: '--', text: '暂无数据',
