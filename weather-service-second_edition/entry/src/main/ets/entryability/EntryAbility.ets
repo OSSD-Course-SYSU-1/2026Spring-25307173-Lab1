@@ -14,16 +14,15 @@ export default class EntryAbility extends UIAbility {
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
-    // ✨ 核心适配功能：获取主窗口，并开启沉浸式全屏（消除顶部和底部的黑边）
-    try {
-      let windowClass: window.Window = windowStage.getMainWindowSync();
+    // 开启沉浸式全屏
+    windowStage.getMainWindow().then((windowClass: window.Window) => {
       windowClass.setWindowLayoutFullScreen(true);
-    } catch (err) {
+    }).catch((err: Error) => {
       hilog.error(0x0000, 'testTag', '设置全屏失败: %{public}s', JSON.stringify(err));
-    }
+    });
 
-    // ⚠️ 关键修正：确保这里加载的是你的真实主页 'pages/Index'
-    windowStage.loadContent('pages/Index', (err, data) => {
+    // ✨ 核心修复：把启动路径改回你的启动页 'pages/Splash'
+    windowStage.loadContent('pages/Splash', (err, data) => {
       if (err.code) {
         hilog.error(0x0000, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err) ?? '');
         return;
