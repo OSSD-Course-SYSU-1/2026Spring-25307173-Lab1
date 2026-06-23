@@ -45,6 +45,7 @@ struct Splash {
           colors: [['#0d47a1', 0.0], ['#2196f3', 1.0]]
         })
 
+      // 核心内容容器
       Column({ space: 30 }) {
         // 太阳动画图标
         Stack() {
@@ -93,8 +94,12 @@ struct Splash {
       }
       .opacity(this.opacityValue)
       .scale({ x: this.scaleValue, y: this.scaleValue })
+      // ✨ [核心修改 1/2] 平板自适应：保证里面的太阳和文字在超大屏幕上也是居中聚拢的，不会散开
+      .constraintSize({ maxWidth: 600 })
     }
     .width('100%')
     .height('100%')
+    // ✨ [核心修改 2/2] 沉浸式全屏：让蓝天背景的渐变色彻底铺满刘海屏和底部导航条区域
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
   }
 }
