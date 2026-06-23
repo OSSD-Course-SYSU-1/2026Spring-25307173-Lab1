@@ -196,13 +196,13 @@ struct Index {
           .fontColor(this.currentTheme.subText)
       }
       .width('100%')
-      .padding({ top: 40, bottom: 10 })
+      // ✨ [核心修改 1/3] 防刘海遮挡：将原本的 top: 40 加大到了 top: 50
+      .padding({ top: 50, bottom: 10 })
       .backgroundColor(Color.Transparent)
       .justifyContent(FlexAlign.Center)
 
       Refresh({ refreshing: $$this.isRefreshing }) {
         Scroll() {
-          // ✨ 核心优化：引入 Stack 层叠布局，将内容和加载动画重叠
           Stack({ alignContent: Alignment.Center }) {
 
             // 🎈 底层：主要内容区域
@@ -328,7 +328,8 @@ struct Index {
               .padding({ bottom: 40 })
             }
             .width('100%')
-            // ✨ 当正在加载数据且不是下拉刷新时，让底层内容变暗变透明（呼吸感）
+            // ✨ [核心修改 2/3] 平板自适应防拉伸：限制所有卡片的最大宽度为 600
+            .constraintSize({ maxWidth: 600 })
             .opacity((this.isLoading && !this.isRefreshing) ? 0.3 : 1.0)
             .animation({ duration: 300, curve: Curve.EaseInOut })
 
@@ -346,7 +347,6 @@ struct Index {
               .padding(30)
               .backgroundColor(this.currentTheme.cardBg)
               .borderRadius(20)
-              // 给加载框加个小阴影，让它立体悬浮起来
               .shadow({ radius: 10, color: 'rgba(0,0,0,0.15)', offsetX: 0, offsetY: 5 })
             }
 
@@ -366,7 +366,9 @@ struct Index {
     .width('100%')
     .height('100%')
     .backgroundColor(this.currentTheme.pageBg)
-    .animation({ duration: 500, curve: Curve.EaseInOut });
+    .animation({ duration: 500, curve: Curve.EaseInOut })
+    // ✨ [核心修改 3/3] 沉浸式全屏：让背景色顶破天际线，延伸到状态栏和导航栏区域
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM]);
   }
 
   getSelectOptions(): Array<SelectOption> {
